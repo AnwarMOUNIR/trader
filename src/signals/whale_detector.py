@@ -82,9 +82,10 @@ class WhaleDetector:
             data["Passes_Dollar_Volume"] = dollar_vol >= 100_000.0
 
         # 3. 12-Month Momentum & 52-Week High Anchoring Neutralization
-        data["Close_252D_Ago"] = data["Close"].shift(252).bfill()
-        data["Mom_12M"] = (data["Close"] / data["Close_252D_Ago"]) - 1.0
-        data["High_52W"] = data["High"].rolling(window=252, min_periods=30).max()
+        lookback_mom = min(250, max(20, len(data) - 1))
+        data["Close_252D_Ago"] = data["Close"].shift(lookback_mom).bfill().fillna(data["Close"].iloc[0])
+        data["Mom_12M"] = (data["Close"] / data["Close_252D_Ago"].replace(0, np.nan)).fillna(1.0) - 1.0
+        data["High_52W"] = data["High"].rolling(window=min(252, len(data)), min_periods=10).max()
         data["Ratio_52W"] = (data["Close"] / data["High_52W"]).clip(0.0, 1.0).fillna(1.0)
 
         # Neutralized Momentum Score (Daniel & Moskowitz momentum crash protection)
