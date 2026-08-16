@@ -1,0 +1,22 @@
+# Environment & API Keys
+.env
+*.env
+
+# Python Cache & Bytecode
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+
+# Local Data Cache & Output
+data_cache/
+output/
+logs/
+*.png
+*.log
+*.sqlite
+*.db
+
+# OS Artifacts
+.DS_Store
+Thumbs.db
