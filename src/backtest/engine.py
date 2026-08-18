@@ -75,7 +75,7 @@ class BacktestEngine:
         signals_dict: Dict[str, pd.DataFrame] = {}
         for sym, df in active_assets.items():
             market_type = "BVC" if ".BVC" in sym else "US"
-            signals_df = self.whale_detector.process_asset(df, market=market_type)
+            signals_df = self.whale_detector.process_asset(df, market=market_type, symbol=sym)
             signals_dict[sym] = signals_df
 
         # 3. Compute Risk-Parity & Volatility-Managed Target Weights

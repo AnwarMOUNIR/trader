@@ -59,7 +59,7 @@ def main():
     asset_summaries = []
 
     for sym, df in data_dict.items():
-        sig_df = detector.process_asset(df, market="US")
+        sig_df = detector.process_asset(df, market="US", symbol=sym)
         signals_dict[sym] = sig_df
         last_row = sig_df.iloc[-1]
 

@@ -205,7 +205,7 @@ class AlpacaPaperTrader:
         detector = WhaleDetector()
         signals_dict = {}
         for sym, df in data_dict.items():
-            signals_dict[sym] = detector.process_asset(df, market="US")
+            signals_dict[sym] = detector.process_asset(df, market="US", symbol=sym)
 
         allocator = PortfolioAllocator(
             target_annual_vol=0.32,

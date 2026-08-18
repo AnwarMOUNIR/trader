@@ -13,6 +13,8 @@ import numpy as np
 import pandas as pd
 from sklearn.ensemble import IsolationForest
 
+from src.signals.insider_scraper import InsiderIntelligenceEngine
+
 logger = logging.getLogger("WhaleTracking.Signals")
 
 
@@ -25,7 +27,7 @@ class WhaleSignalResult:
 
 
 class WhaleDetector:
-    """Multi-dimensional Institutional Smart-Money Anomaly Detector."""
+    """Multi-dimensional Institutional Smart-Money & Insider Anomaly Detector."""
 
     def __init__(
         self,
@@ -34,7 +36,8 @@ class WhaleDetector:
         rvol_threshold: float = 2.5,
         min_momentum: float = 0.10,
         contamination: float = 0.08,
-        use_isolation_forest: bool = True
+        use_isolation_forest: bool = True,
+        use_insider_data: bool = True
     ):
         self.volume_window = volume_window
         self.z_score_threshold = z_score_threshold
@@ -42,9 +45,16 @@ class WhaleDetector:
         self.min_momentum = min_momentum
         self.contamination = contamination
         self.use_isolation_forest = use_isolation_forest
+        self.use_insider_data = use_insider_data
+        self.insider_engine = InsiderIntelligenceEngine() if use_insider_data else None
 
-    def process_asset(self, df: pd.DataFrame, market: str = "US") -> pd.DataFrame:
-        """Calculate full feature matrix and whale signals for an individual asset."""
+    def process_asset(
+        self,
+        df: pd.DataFrame,
+        market: str = "US",
+        symbol: Optional[str] = None
+    ) -> pd.DataFrame:
+        """Calculate full feature matrix, whale signals, and insider convergence for an asset."""
         data = df.copy()
 
         # 1. Basic Returns & Historical Volatility
@@ -195,12 +205,12 @@ class WhaleDetector:
                     peak_p = close_vals[i]
 
                 # Asymmetric Payoff Exit Rules:
-                # 1. Hard stop loss: -4.8% from entry (ultra-tight loss cutting)
-                # 2. Profit preservation: for strong winners (+18%+), trail stop at -9% from peak
+                # 1. Hard stop loss: -4.5% from entry (ultra-tight loss cutting)
+                # 2. Profit preservation: for strong winners (+15%+), trail stop at -8% from peak
                 # 3. Trend exhaustion: Close drops below EMA20 and breaks trend
-                hit_hard_stop = close_vals[i] < entry_p * 0.952
-                hit_profit_trail = (peak_p > entry_p * 1.18) and (close_vals[i] < peak_p * 0.91)
-                hit_ema20_break = (close_vals[i] < ema20_vals[i] * 0.978)
+                hit_hard_stop = close_vals[i] < entry_p * 0.955
+                hit_profit_trail = (peak_p > entry_p * 1.15) and (close_vals[i] < peak_p * 0.92)
+                hit_ema20_break = (close_vals[i] < ema20_vals[i] * 0.982)
                 hit_distribution = (upthrust_vals[i] == 1) and (close_vals[i] < ema20_vals[i])
 
                 if hit_hard_stop or hit_profit_trail or hit_ema20_break or hit_distribution:
@@ -212,14 +222,32 @@ class WhaleDetector:
         data["Whale_Signal"] = entry_signal
         data["In_Whale_Position"] = in_position
 
-        # Composite Alpha Score:
+        # 8. Insider & Regulatory Intelligence Convergence Overlay
+        insider_boost = 1.0
+        if self.use_insider_data and self.insider_engine and symbol and market == "US":
+            try:
+                insider_df = self.insider_engine.compute_insider_signals(symbol, data["Close"])
+                if "Insider_Conviction_Boost" in insider_df:
+                    insider_boost = float(insider_df["Insider_Conviction_Boost"].iloc[-1])
+                    data["Insider_Score"] = insider_df["Insider_Score"]
+                    data["Insider_Buy_Ratio"] = insider_df["Insider_Buy_Ratio"]
+            except Exception as e:
+                logger.warning(f"Could not compute insider convergence for {symbol}: {e}")
+                data["Insider_Score"] = 0.0
+                data["Insider_Buy_Ratio"] = 0.50
+        else:
+            data["Insider_Score"] = 0.0
+            data["Insider_Buy_Ratio"] = 0.50
+
+        # Composite Alpha Score: Convergence of Tape Momentum + Insider Smart Money Conviction
         composite_score = (
             data["Mom_Score"] * 3.5 +
             np.clip(data["Vol_ZScore"] / 1.0, 0.0, 6.0) +
             (data["Wyckoff_Absorption"] * 2.5) +
             (data["Volume_Breakout"] * 2.5) +
             np.clip(data["OFI_Norm_Z"] * 2.0, 0.0, 4.0)
-        )
+        ) * insider_boost
+
         data["Composite_Alpha_Score"] = np.where(data["In_Whale_Position"] == 1, composite_score, 0.0)
         data["Conviction_Multiplier"] = np.where(data["In_Whale_Position"] == 1, 1.0 + np.clip(composite_score / 2.0, 0.0, 6.0), 0.0)
 
