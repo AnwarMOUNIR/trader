@@ -26,9 +26,9 @@ def main():
     parser = argparse.ArgumentParser(description="Multi-Horizon Live Paper & Dry-Run Trader")
     parser.add_argument("--api-key", type=str, default=os.getenv("APCA_API_KEY_ID"), help="Alpaca API Key ID")
     parser.add_argument("--secret-key", type=str, default=os.getenv("APCA_API_SECRET_KEY"), help="Alpaca Secret Key")
-    parser.add_argument("--mode", type=str, default="dry-run", choices=["dry-run", "live", "scheduled"], help="Execution mode")
+    parser.add_argument("--mode", type=str, default="live-5m", choices=["dry-run", "live", "scheduled", "live-5m"], help="Execution mode")
     parser.add_argument("--interval", type=int, default=5, help="Scheduler interval in minutes")
-    parser.add_argument("--iterations", type=int, default=1, help="Number of scheduled iterations")
+    parser.add_argument("--iterations", type=int, default=12, help="Number of scheduled iterations (default 12 = 1 hour of 5m sessions)")
     parser.add_argument("--capital", type=float, default=100000.0, help="Initial simulation capital")
     args = parser.parse_args()
 
@@ -41,7 +41,34 @@ def main():
     print(f"Initial Capital: ${args.capital:,.2f}")
     print("=" * 80)
 
-    if args.mode == "scheduled":
+    if args.mode == "live-5m":
+        api_key = args.api_key or os.getenv("APCA_API_KEY_ID", "")
+        secret_key = args.secret_key or os.getenv("APCA_API_SECRET_KEY", "")
+        trader = AlpacaPaperTrader(api_key=api_key, secret_key=secret_key)
+        import time as pytime
+        print(f"\n[START] Launching 5-Minute Intraday Trading Loop ({args.iterations} iterations)...")
+        for iter_idx in range(1, args.iterations + 1):
+            print(f"\n--- Intraday 5m Session Iteration [{iter_idx}/{args.iterations}] ---")
+            try:
+                result = trader.run_daily_cycle()
+                print(f"Timestamp:       {result.get('timestamp')}")
+                print(f"Account Equity:  ${result.get('equity', 0):,.2f}")
+                print(f"Settled Cash:    ${result.get('cash', 0):,.2f}")
+                print(f"Active Targets:  {result.get('target_allocation')}")
+                print("Executed Orders:")
+                orders = result.get("executed_orders", [])
+                for order in orders:
+                    print(f"  • {order.get('side')} {order.get('qty')} {order.get('symbol')} @ ${order.get('filled_price', 0):,.2f} [Status: {order.get('status')}]")
+                if not orders:
+                    print("  • Position weights balanced - holding active 5m signals.")
+            except Exception as e:
+                logger.error(f"Error in 5m cycle iteration {iter_idx}: {e}")
+
+            if iter_idx < args.iterations:
+                print(f"Waiting {args.interval} minutes ({args.interval * 60}s) for next 5m session...")
+                pytime.sleep(args.interval * 60)
+        print("\n[OK] Intraday 5m trading loop completed.")
+    elif args.mode == "scheduled":
         sim = DryRunSimulator(initial_capital=args.capital)
         trader = AlpacaPaperTrader(api_key=args.api_key, secret_key=args.secret_key)
         scheduler = ExecutionScheduler(
