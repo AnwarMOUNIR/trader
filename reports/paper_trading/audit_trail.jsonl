@@ -1,0 +1,1 @@
+{"timestamp_utc": "2026-10-31T18:36:41.280998+00:00", "market_open": false, "account_equity": 99358.02, "high_water_mark": 99358.02, "current_drawdown": 0.0, "dial_factor": 1.0, "macro_bull": true, "strategy_state": "ACTIVE_MOMENTUM", "target_symbols": ["CVX", "XOM", "TSLA", "ABBV", "CRM", "TMO", "V", "MA"], "orders_placed_count": 0, "dry_run": true}
